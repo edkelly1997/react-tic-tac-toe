@@ -1,32 +1,46 @@
 import { useState } from "react";
 
 export default function Game() {
-  const [history, setHistory] = useState([Array(9).fill(null)]);
+  const [history, setHistory] = useState([{squares: Array(9).fill(null), moveLocation: null}]);
   const [currentMove, setCurrentMove] = useState(0);
   const xIsNext = currentMove % 2 === 0;
-  const currentSquares = history[currentMove];
+  const currentSquares = history[currentMove].squares;
+  const [isReversed, setIsReversed] = useState(false);
 
-  function handlePlay(nextSquares) {
-    const nextHistory = [...history.slice(0, currentMove + 1), nextSquares];
+  function handlePlay(nextState) {
+    const nextHistory = [...history.slice(0, currentMove + 1), nextState];
     setHistory(nextHistory);
     setCurrentMove(nextHistory.length - 1);
   }
-
+  
   function jumpTo(nextMove) {
     setCurrentMove(nextMove);
   }
 
-  const moves = history.map((squares, move) => {
+  function reverseOrder() {
+    setIsReversed(!isReversed);
+  }
+
+  const moves = history.map((step, move) => {
+    const { moveLocation } = step;
     let description;
     if (move > 0) {
-      description = "Go to move #" + move;
+      description = `Go to move #${move} (${moveLocation.row}, ${moveLocation.col})`;
     } else {
       description = "Go to game start";
     }
     return (
       <li key={move}>
+      {move === currentMove ? (
+        move === 0 ? (
+          <span>No moves have been made</span>
+        ) : (
+          <span>You are at move #{move} ({moveLocation.row}, {moveLocation.col})</span>
+        )
+      ) : (
         <button onClick={() => jumpTo(move)}>{description}</button>
-      </li>
+      )}
+    </li>
     );
   });
 
@@ -36,17 +50,10 @@ export default function Game() {
         <Board xIsNext={xIsNext} squares={currentSquares} onPlay={handlePlay} />
       </div>
       <div className="game-info">
-        <ol>{moves}</ol>
+        <button className="reverse-order" onClick={reverseOrder}>Toggle Moves</button>
+        <ol>{isReversed ? [...moves].reverse() : moves}</ol>
       </div>
     </div>
-  );
-}
-
-function Square({ value, onSquareClick }) {
-  return (
-    <button className="square" onClick={onSquareClick}>
-      {value}
-    </button>
   );
 }
 
@@ -61,36 +68,58 @@ function Board({ xIsNext, squares, onPlay }) {
     } else {
       nextSquares[i] = "O";
     }
-    onPlay(nextSquares);
-  }
+    
+  const row = Math.floor(i / 3);
+  const col = i % 3;
 
-  const winner = calculateWinner(squares);
+    onPlay({ squares: nextSquares, moveLocation: { row, col } });
+  }
+  
+  const result = calculateWinner(squares);
+  const winningLine = result?.line;
+  const winner = result?.winner;
+
   let status;
-  if (winner) {
+  if (result) {
     status = "Winner: " + winner;
   } else {
     status = "Next player: " + (xIsNext ? "X" : "O");
   }
 
+  const board = [];
+
+  for (let row = 0; row < 3; row++) {
+    const rowSquares = [];
+    for (let col = 0; col < 3; col++) {
+      const i = row * 3 + col;
+      rowSquares.push(
+        <Square
+          key={i}
+          value={squares[i]}
+          onSquareClick={() => handleClick(i)}
+          className = {winningLine && winningLine.includes(i) ? "square-winner" : "square"}
+        />
+      );
+    }
+    board.push(
+      <div key={row} className="board-row">
+        {rowSquares}
+      </div>
+    );
+  }
   return (
     <>
       <div className="status">{status}</div>
-      <div className="board-row">
-        <Square value={squares[0]} onSquareClick={() => handleClick(0)} />
-        <Square value={squares[1]} onSquareClick={() => handleClick(1)} />
-        <Square value={squares[2]} onSquareClick={() => handleClick(2)} />
-      </div>
-      <div className="board-row">
-        <Square value={squares[3]} onSquareClick={() => handleClick(3)} />
-        <Square value={squares[4]} onSquareClick={() => handleClick(4)} />
-        <Square value={squares[5]} onSquareClick={() => handleClick(5)} />
-      </div>
-      <div className="board-row">
-        <Square value={squares[6]} onSquareClick={() => handleClick(6)} />
-        <Square value={squares[7]} onSquareClick={() => handleClick(7)} />
-        <Square value={squares[8]} onSquareClick={() => handleClick(8)} />
-      </div>
+      {board}
     </>
+  );
+}
+
+function Square({ value, onSquareClick, className }) {
+  return (
+    <button className={className} onClick={onSquareClick}>
+      {value}
+    </button>
   );
 }
 
@@ -108,8 +137,9 @@ function calculateWinner(squares) {
   for (let i = 0; i < lines.length; i++) {
     const [a, b, c] = lines[i];
     if (squares[a] && squares[a] === squares[b] && squares[a] === squares[c]) {
-      return squares[a];
+      return {winner: squares[a], line: lines[i]};
     }
   }
   return null;
 }
+
